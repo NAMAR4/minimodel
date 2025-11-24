@@ -5,6 +5,7 @@
 *.npz
 *.zip
 *.npy
+*.pkl
 
 # checkpoints
 *.pt
