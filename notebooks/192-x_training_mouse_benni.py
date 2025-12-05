@@ -21,6 +21,7 @@ def main():
     mouse_id = args.mouse_id
     data_path = '../data'
     weight_path = './checkpoints_trained'
+    os.makedirs(weight_path, exist_ok=True)
     np.random.seed(1)
 
     # load images
