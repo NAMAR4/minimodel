@@ -103,7 +103,7 @@ def main():
             # initialize conv1 with the fullmodel weights
             model.core.features.layer0.conv.weight.data = pretrained_state_dict['core.features.layer0.conv.weight']
             model.core.features.layer0.conv.weight.requires_grad = False
-            best_state_dict = model_trainer.train(model, spks_train, spks_val, img_train, img_val, device=device, l2_readout=0.2, hs_readout=hs_readout)
+            best_state_dict = model_trainer.train(model, spks_train_one_neuron, spks_val_one_neuron, img_train, img_val, device=device, l2_readout=0.2, hs_readout=hs_readout)
             torch.save(best_state_dict, model_path)
             print('saved model', model_path)
         model.load_state_dict(torch.load(model_path))
