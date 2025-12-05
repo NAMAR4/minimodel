@@ -20,7 +20,7 @@ def main():
     device = torch.device('cuda')
     mouse_id = args.mouse_id
     data_path = '../data'
-    weight_path = './checkpoints_trained'
+    weight_path = './checkpoints_192-x'
     os.makedirs(weight_path, exist_ok=True)
     np.random.seed(1)
 
