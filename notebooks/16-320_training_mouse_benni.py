@@ -21,6 +21,7 @@ def main():
     mouse_id = args.mouse_id
     data_path = '../data'
     weight_path = './checkpoints_16-320'
+    results_path = './results_16-320'
     os.makedirs(weight_path, exist_ok=True)
     np.random.seed(1)
 
@@ -93,6 +94,15 @@ def main():
     valid_idxes = np.where(test_fev > threshold)[0]
     print(f'valid neurons: {len(valid_idxes)} / {len(test_fev)}')
     print(f'FEVE (test, FEV>0.15): {np.mean(test_feve[test_fev > threshold])}')
+
+
+    # ---- Saving performance scores ----
+    file_name = "results_" + str(mouse_id)
+    results_file_path = os.path.join(results_path, file_name)
+    
+    print(f"Results saved at: {results_file_path}")
+    np.savez(results_file_path, FEV_scores=test_fev, FEVE_scores=test_feve, neurons_index=ineur)
+
 
 
 if __name__ == "__main__":

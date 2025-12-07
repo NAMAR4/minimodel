@@ -69,7 +69,7 @@ def main():
     print(f'valid neurons: {len(valid_idxes_neurons)} / {len(test_fev)}')
 
     # We only subsample up to 100 neurons to reduce computing time to ~ 7h per mouse
-    n_selecting = min(2, len(valid_idxes_neurons))
+    n_selecting = min(50, len(valid_idxes_neurons))
     selected_idxes_neurons = np.random.choice(valid_idxes_neurons, size=n_selecting, replace=False)
 
     seed = 1
