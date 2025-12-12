@@ -6,6 +6,7 @@
 *.zip
 *.npy
 *.pkl
+*.yml
 
 # checkpoints
 *.pt
