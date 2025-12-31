@@ -55,6 +55,7 @@ def val_epoch(model, val_dl, batch_size=None, l1_readout=0, l2_readout=0, device
             img_batch = batch["screen"]
             spks_batch = spks_batch.to(device).squeeze()        # Right now we dont use chunk_size in cfg_val.dataset.modality_config.screen.chunk_size
             img_batch = img_batch.to(device).squeeze()
+            img_batch = img_batch.unsqueeze(1)                             # add a channel dim
 
             spks_pred = model(img_batch)
 
@@ -66,9 +67,12 @@ def val_epoch(model, val_dl, batch_size=None, l1_readout=0, l2_readout=0, device
             test_loss += loss.item()
             
             kend = min(k+batch_size, n_test)
-            spks_test = spks_batch
+            spks_test[k:kend] = spks_batch
             spks_test_pred[k:kend] = spks_pred
         test_loss /=  n_test
+
+    print("spks_test | type: ", type(spks_test), " shape: ", spks_test.shape, " ~from model_trainer.train_epoch")
+    print("spks_test_pred | type: ", type(spks_test_pred), " shape: ", spks_test_pred.shape, " ~from model_trainer.train_epoch")
 
     varexp = ((spks_test - spks_test_pred)**2).sum(axis=0) 
     varexp /= ((spks_test-spks_test.mean(axis=0))**2).sum(axis=0)
@@ -89,6 +93,7 @@ def train_epoch(model, optimizer, train_dl, epoch=0, batch_size=100, l1_readout=
         img_batch = batch["screen"]
         spks_batch = spks_batch.to(device).squeeze()        # Right now we dont use chunk_size in cfg_val.dataset.modality_config.screen.chunk_size
         img_batch = img_batch.to(device).squeeze()
+        img_batch = img_batch.unsqueeze(1)                             # add a channel dim
 
         spks_pred = model(img_batch, detach_core=detach_core)
         if parallel:
