@@ -24,31 +24,46 @@ def copy_state(model):
     return copy_dict
 
 
-def test_epoch(model, img_test, batch_size=100):
+def test_epoch(model, test_dl, dl_length, device=torch.device('cuda')):
     model.eval()
-    n_test = img_test.shape[0]
-    spks_test_pred = []
-    with torch.no_grad():
-        for k in np.arange(0, n_test, batch_size):
-            kend = min(k+batch_size, n_test)
-            img_batch = img_test[k:kend]
-            spks_pred = model(img_batch)
-            spks_test_pred.append(spks_pred.detach().cpu().numpy())
-            # spks_test_pred[k:kend] = spks_pred
-    test_pred = np.vstack(spks_test_pred)
-    return test_pred
 
-def val_epoch(model, val_dl, batch_size=None, l1_readout=0, l2_readout=0, device=torch.device('cuda'), parallel=False, hs_reg=0.0):
+    _, batch = next(iter(test_dl))
+    n_neurons = batch["responses"].shape[-1]
+    batch_size = batch["responses"].shape[0]
+
+    spks_test_pred = torch.zeros((dl_length, n_neurons), device=device)
+    spks_test = torch.zeros((dl_length, n_neurons), device=device)
+    with torch.no_grad():
+        index_array = np.arange(0, dl_length, batch_size)
+        for k , (_, batch) in zip(index_array, test_dl):
+
+            spks_batch = batch["responses"]
+            img_batch = batch["screen"]
+            spks_batch = spks_batch.to(device).squeeze()        # Right now we dont use chunk_size in cfg_val.dataset.modality_config.screen.chunk_size
+            img_batch = img_batch.to(device).squeeze()
+            img_batch = img_batch.unsqueeze(1)   
+
+            spks_pred = model(img_batch)
+
+            kend = min(k+batch_size, dl_length)
+            spks_test[k:kend] = spks_batch
+            spks_test_pred[k:kend] = spks_pred
+
+    spks_test = spks_test.detach().cpu().numpy()
+    spks_test_pred = spks_test_pred.detach().cpu().numpy()
+
+    return spks_test, spks_test_pred
+
+def val_epoch(model, val_dl, dl_length, batch_size=None, l1_readout=0, l2_readout=0, device=torch.device('cuda'), parallel=False, hs_reg=0.0):
     model.eval()
-    n_test = len(val_dl)
     _, batch = next(iter(val_dl))
     n_neurons = batch["responses"].shape[-1]
     batch_size = batch["responses"].shape[0]
     test_loss = 0
-    spks_test_pred = torch.zeros((n_test, n_neurons), device=device)
-    spks_test = torch.zeros((n_test, n_neurons), device=device)
+    spks_test_pred = torch.zeros((dl_length, n_neurons), device=device)
+    spks_test = torch.zeros((dl_length, n_neurons), device=device)
     # spks_test_gpu = spks_test.to(device)
-    index_array = np.arange(0, n_test, batch_size)
+    index_array = np.arange(0, dl_length, batch_size)
     with torch.no_grad():
         for k , (_, batch) in zip(index_array, val_dl):
             spks_batch = batch["responses"]
@@ -66,10 +81,10 @@ def val_epoch(model, val_dl, batch_size=None, l1_readout=0, l2_readout=0, device
                 loss = model.loss_function(spks_batch, spks_pred, l1_readout=l1_readout, l2_readout=l2_readout, hs_reg=hs_reg)
             test_loss += loss.item()
             
-            kend = min(k+batch_size, n_test)
+            kend = min(k+batch_size, dl_length)
             spks_test[k:kend] = spks_batch
             spks_test_pred[k:kend] = spks_pred
-        test_loss /=  n_test
+        test_loss /=  dl_length
 
     print("spks_test | type: ", type(spks_test), " shape: ", spks_test.shape, " ~from model_trainer.train_epoch")
     print("spks_test_pred | type: ", type(spks_test_pred), " shape: ", spks_test_pred.shape, " ~from model_trainer.train_epoch")
@@ -81,7 +96,7 @@ def val_epoch(model, val_dl, batch_size=None, l1_readout=0, l2_readout=0, device
 
     return test_loss, varexp, test_pred
 
-def train_epoch(model, optimizer, train_dl, epoch=0, batch_size=100, l1_readout=0, \
+def train_epoch(model, optimizer, train_dl, dl_length, epoch=0, batch_size=100, l1_readout=0, \
     device = torch.device('cuda'), detach_core=False, clamp=True, parallel=False, hs_reg=0.0):
     np.random.seed(epoch)
 
@@ -111,10 +126,10 @@ def train_epoch(model, optimizer, train_dl, epoch=0, batch_size=100, l1_readout=
                 model.readout.Wy.data.clamp_(0) 
         train_loss += loss.item()
         del loss
-    train_loss /= len(train_dl)
+    train_loss /= dl_length
     return train_loss
 
-def train(model, train_dl, val_dl, l2_readout=0.1, hs_readout=0, clamp=True, device='cuda', n_epochs_period=[100, 30, 30, 30], patience=5):
+def train(model, train_dl, val_dl, train_dl_length, val_dl_length, l2_readout=0.1, hs_readout=0, clamp=True, device='cuda', n_epochs_period=[100, 30, 30, 30], patience=5):
     import time
     # batch_size = 100
     detach_core = False
@@ -146,11 +161,11 @@ def train(model, train_dl, val_dl, l2_readout=0.1, hs_readout=0, clamp=True, dev
         for epoch in range(n_epochs):
             model.train()
             train_loss = train_epoch(
-                                model, optimizer, train_dl, epoch=epoch,
+                                model, optimizer, train_dl, dl_length=train_dl_length, epoch=epoch,
                                 device=device, detach_core=detach_core, clamp=clamp, hs_reg=hs_readout
                             )
             model.eval()
-            val_loss, varexp, _ = val_epoch(model, val_dl, device=device)
+            val_loss, varexp, _ = val_epoch(model, val_dl, dl_length=val_dl_length, device=device)
             
             if (varexp.mean() > varexp_max) and (not np.isnan(val_loss*train_loss)):
                 best_state_dict = copy_state(model)
