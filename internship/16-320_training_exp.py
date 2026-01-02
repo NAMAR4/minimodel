@@ -5,7 +5,6 @@ import torch
 import torchvision
 import argparse
 from pathlib import Path
-import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 from omegaconf import OmegaConf, open_dict

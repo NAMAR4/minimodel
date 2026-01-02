@@ -1,11 +1,21 @@
 import os
+from collections import defaultdict
 import numpy as np
 import torch
+import torchvision
 import argparse
 from minimodel import data
 from minimodel import model_builder
 from minimodel import model_trainer
+from minimodel import model_trainer_exp
 from minimodel import metrics
+from pathlib import Path
+
+from tqdm import tqdm
+from omegaconf import OmegaConf, open_dict
+
+from experanto.datasets import ChunkDataset
+from experanto.dataloaders import get_multisession_dataloader
 
 
 
@@ -19,42 +29,52 @@ def main():
     # setup
     device = torch.device('cuda')
     mouse_id = args.mouse_id
-    data_path = '../data'
-    weight_path = './checkpoints_192-x'
+    weight_path = './checkpoints_192-x_exp'
+    results_path = './results_192-x_exp'
     os.makedirs(weight_path, exist_ok=True)
-    np.random.seed(1)
+    os.makedirs(results_path, exist_ok=True)
 
-    # load images
-    img = data.load_images(data_path, mouse_id, file=data.img_file_name[mouse_id])
+    # print information
+    print("torch:", torch.__version__, "cuda:", torch.version.cuda)
+    print("torchvision:", torchvision.__version__)
+    print("cuda available:", torch.cuda.is_available())
 
-    # load neurons
-    fname = '%s_nat60k_%s.npz'%(data.db[mouse_id]['mname'], data.db[mouse_id]['datexp'])
-    spks, istim_train, istim_test, xpos, ypos, spks_rep_all = data.load_neurons(file_path = os.path.join(data_path, fname), mouse_id = mouse_id)
-    n_stim, n_neurons = spks.shape
+    # load configs for dataloaders
+    cfg_train = OmegaConf.load("./cfg_experanto/basic_config.yaml")
+    cfg_val = OmegaConf.load("./cfg_experanto/basic_config.yaml")
+    cfg_test = OmegaConf.load("./cfg_experanto/basic_config.yaml")
 
-    # split train and validation set
-    itrain, ival = data.split_train_val(istim_train, train_frac=0.9)
+    cfg_train.dataset.modality_config.screen.valid_condition = {"tier": "train"}
+    cfg_val.dataset.modality_config.screen.valid_condition = {"tier": "validation"}
 
-    # normalize data
-    spks, spks_rep_all = data.normalize_spks(spks, spks_rep_all, itrain)
+    cfg_test.dataset.modality_config.screen.valid_condition = {"tier": "test"}
+    cfg_test.dataset.out_keys.append("image_id")        # I sadly need this to combine all samples with same image_id
+    cfg_test.dataloader.drop_last = False               # Here I dont need the batches to be the same size
+    cfg_test.dataloader.shuffle = False
 
+    # build dataloaders
+    paths = ["/mnt/vast-nhr/projects/bthesis_cidas_richter/benjamin/minimodel/internship/data_experanto/nat30k_L1_A5_022723_experanto"]
+    train_dl = get_multisession_dataloader(paths, cfg_train)
+    val_dl = get_multisession_dataloader(paths, cfg_val)
+    test_dl = get_multisession_dataloader(paths, cfg_test)
 
-    ineur = np.arange(0, n_neurons) #np.arange(0, n_neurons, 5)
-    spks_train = torch.from_numpy(spks[itrain][:,ineur]).to(device)
-    spks_val = torch.from_numpy(spks[ival][:,ineur]).to(device)
+    if cfg_train.dataloader.drop_last:  train_dl_length = len(train_dl) * cfg_train.dataloader.batch_size
+    else:                               train_dl_length = model_trainer_exp.count_samples(train_dl)
+    if cfg_val.dataloader.drop_last:    val_dl_length = len(val_dl) * cfg_val.dataloader.batch_size
+    else:                               val_dl_length = model_trainer_exp.count_samples(val_dl)
+    if cfg_test.dataloader.drop_last:   test_dl_length = len(test_dl) * cfg_test.dataloader.batch_size
+    else:                               test_dl_length = model_trainer_exp.count_samples(test_dl)
 
-    print('spks_train: ', spks_train.shape, spks_train.min(), spks_train.max())
-    print('spks_val: ', spks_val.shape, spks_val.min(), spks_val.max())
+    print("length of train_dl: ", train_dl_length)
+    print("length of val_dl: ", val_dl_length)
+    print("length of test_dl: ", test_dl_length)
 
-    img_train = torch.from_numpy(img[istim_train][itrain]).to(device).unsqueeze(1) # change :130 to 25:100 
-    img_val = torch.from_numpy(img[istim_train][ival]).to(device).unsqueeze(1)
-    img_test = torch.from_numpy(img[istim_test]).to(device).unsqueeze(1)
-
-    print('img_train: ', img_train.shape, img_train.min(), img_train.max())
-    print('img_val: ', img_val.shape, img_val.min(), img_val.max())
-    print('img_test: ', img_test.shape, img_test.min(), img_test.max())
-
-    input_Ly, input_Lx = img_train.shape[-2:]
+    
+    _ ,batch = next(iter(train_dl))
+    NN = batch["responses"].shape[-1]       # number of neurons
+    batch_size = cfg_val.dataloader.batch_size  # nur im val_epoch benötigt
+    print("number of neurons: ", NN)
+    print("Batch Size: ", batch_size)
 
 
     seed = 1
@@ -64,7 +84,7 @@ def main():
 
         nconv1 = 192
         nconv2 = 192
-        model, in_channels = model_builder.build_model(NN=len(ineur), n_layers=nlayers, n_conv=nconv1, n_conv_mid=nconv2)
+        model, in_channels = model_builder.build_model(NN=NN, n_layers=nlayers, n_conv=nconv1, n_conv_mid=nconv2)
         model_name = model_builder.create_model_name(data.mouse_names[mouse_id], data.exp_date[mouse_id], n_layers=nlayers, in_channels=in_channels, seed=seed)
         
         model_path = os.path.join(weight_path, model_name)
@@ -75,13 +95,20 @@ def main():
         # Training the model
         print(device)
         if not os.path.exists(model_path):
-            best_state_dict = model_trainer.train(model, spks_train, spks_val, img_train, img_val, device=device)
+            best_state_dict = model_trainer_exp.train(model, train_dl=train_dl, val_dl=val_dl, 
+                                                train_dl_length=train_dl_length, val_dl_length=val_dl_length, 
+                                                n_neurons=NN, batch_size=batch_size, device=device)
             torch.save(best_state_dict, model_path)
             print('saved model', model_path)
         model.load_state_dict(torch.load(model_path))
         print('loaded model', model_path)
 
         # test model
+        img_test, spks_rep_all, unique_ids = model_trainer_exp.build_img_test_and_spks_rep_all(test_dl, device=device)
+        print("Total test images used: ", len(unique_ids))
+        print("img_test: ", img_test.shape)
+        print("spks_rep_all: ", spks_rep_all.shape)
+
         test_pred = model_trainer.test_epoch(model, img_test)
         print('test_pred: ', test_pred.shape, test_pred.min(), test_pred.max())
 
