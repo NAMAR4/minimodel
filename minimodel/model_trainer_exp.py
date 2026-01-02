@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import time
 from collections import OrderedDict
+from collections import defaultdict
 
 def copy_state(model):
     """
@@ -260,3 +261,65 @@ def monkey_train(model, train_responses, train_real_responses, val_responses, va
             if epoch%5==0 or epoch+1==n_epochs:
                 print(f'epoch {epoch}, train_loss = {train_loss:0.4f}, val_loss = {val_loss:0.4f}, varexp_val = {varexp.mean():0.4f}, time {time.time()-tic:.2f}s')
     return best_state_dict
+
+
+def count_samples(dl):
+    """
+    Counts all the samples in an experanto dataloader
+    
+    :param dl: experanto dataloader
+    """
+    n = 0
+    for _, batch in dl:
+        n += batch["responses"].shape[0]
+    return n
+
+
+def build_img_test_and_spks_rep_all(test_dl, device="cpu"):
+    """
+    Takes in a test_dl and gives back the structured np.arrays 
+    needed to compute the fev and feve scores
+    
+    :param test_dl: experanto dataloader for the test data
+    :param device: 
+    """
+    reps = defaultdict(list)      # image_id -> list of (n_neurons,) numpy arrays
+    img_by_id = {}                # image_id -> img , torch tensor (1,66,130)
+
+    for _, batch in test_dl:
+        spks_batch = batch["responses"]     # (B,1,N)
+        img_batch = batch["screen"]         # (B,66,1,130) or similar
+        img_ids = batch["image_id"]          # (B,)
+
+        # ---- to CPU for storage ----
+        spks_batch = spks_batch.squeeze().detach().cpu().numpy()    # (B,1,N) -> (B,N)
+        
+        img_batch = img_batch.squeeze().unsqueeze(1)    # (B,66,1,130) -> (B,1,66,130)
+        img_batch = img_batch.detach().cpu()
+        
+        img_ids = img_ids.detach().cpu().numpy()
+
+        # ---- group by image_id ----
+        for i in range(len(img_ids)):
+            image_id = int(img_ids[i])
+            reps[image_id].append(spks_batch[i])
+
+            # store first occurrence of the image
+            if image_id not in img_by_id:
+                img_by_id[image_id] = img_batch[i]  # (1,66,130)
+
+    # stable ordering
+    unique_ids = sorted(reps.keys())
+
+    # img_test: (n_unique,1,66,130)
+    img_test = torch.stack([img_by_id[k] for k in unique_ids], dim=0).to(device)
+
+    # spks_rep_all
+    spks_rep_all = np.empty(len(unique_ids), dtype=object)  # np.array (n_unique, )
+    for i, image_id in enumerate(unique_ids):
+        spks_rep_all[i] = np.stack(reps[image_id], axis=0)  # one sample of np.array (n_repeats, n_neurons)
+
+    return img_test, spks_rep_all, unique_ids
+
+
+
