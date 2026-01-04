@@ -34,6 +34,10 @@ def main():
     os.makedirs(weight_path, exist_ok=True)
     os.makedirs(results_path, exist_ok=True)
 
+    path_to_data = '/mnt/vast-nhr/projects/bthesis_cidas_richter/benjamin/minimodel/internship/data_experanto'
+    data_folder = f'nat30k_{data.mouse_names[mouse_id]}_{data.exp_date[mouse_id]}_experanto'
+    data_path = os.path.join(path_to_data, data_folder)
+
     # print information
     print("torch:", torch.__version__, "cuda:", torch.version.cuda)
     print("torchvision:", torchvision.__version__)
@@ -53,10 +57,11 @@ def main():
     cfg_test.dataloader.shuffle = False
 
     # build dataloaders
-    paths = ["/mnt/vast-nhr/projects/bthesis_cidas_richter/benjamin/minimodel/internship/data_experanto/nat30k_L1_A5_022723_experanto"]
+    paths = [data_path]
     train_dl = get_multisession_dataloader(paths, cfg_train)
     val_dl = get_multisession_dataloader(paths, cfg_val)
     test_dl = get_multisession_dataloader(paths, cfg_test)
+    print("Loaded experanto data from: ", data_path)
 
     if cfg_train.dataloader.drop_last:  train_dl_length = len(train_dl) * cfg_train.dataloader.batch_size
     else:                               train_dl_length = model_trainer_exp.count_samples(train_dl)
