@@ -1,0 +1,59 @@
+dataset:
+  global_sampling_rate: null
+  global_chunk_size: null
+  add_behavior_as_channels: false
+  replace_nans_with_means: false
+  cache_data: false
+  normalize_timestamps: true
+  safe_interval_threshold: 0.0   # um alle datenpunkte zu bekommen default war 0.5
+
+  out_keys:
+    - screen
+    - responses
+    - timestamps
+
+  modality_config:
+    screen:
+      keep_nans: false
+      sampling_rate: 7.496251874
+      chunk_size: 1                 # ich habe glaub ich keinen zeitlichen zusammenhang zwischen den samples
+      valid_condition:
+        tier: train
+      offset: 0
+      sample_stride: 1
+      include_blanks: false
+      transforms:
+        normalization:
+          means: 0.0
+          stds: 1.0
+        Resize:
+          _target_: torchvision.transforms.v2.Resize
+          size: [66, 130]
+      interpolation:
+        rescale: true
+        rescale_size: [66, 130]
+
+    responses:
+      keep_nans: false
+      sampling_rate: 7.496251874
+      chunk_size: 1
+      offset: 0.0
+      transforms:
+        normalization:
+          means: 0.0
+          stds: 1.0
+      interpolation:
+        interpolation_mode: nearest_neighbor
+      filters:
+        nan_filter:
+          __target__: experanto.filters.common_filters.nan_filter
+          __partial__: true
+          vicinity: 0.05
+
+dataloader:
+  batch_size: 16
+  shuffle: false
+  num_workers: 4
+  pin_memory: true
+  drop_last: false
+  prefetch_factor: 2
