@@ -19,7 +19,8 @@ def main():
     device = torch.device('cuda')
 
     data_path = '../data'
-    output_path = './data_experanto'
+    output_path = './data_experanto_normalized'
+    os.makedirs(output_path, exist_ok=True)
     np.random.seed(1)
     # load images
     img = data.load_images(data_path, mouse_id, file=data.img_file_name[mouse_id])      #TODO ? : image wird normalisiert, gecropt und gecastet zu float32. Will man das so?
@@ -32,6 +33,9 @@ def main():
 
     # split train and validation set
     itrain, ival = data.split_train_val(istim_train, train_frac=0.9)
+
+    # normalize data #TODO for testing purposes
+    spks, spks_rep_all = data.normalize_spks(spks, spks_rep_all, itrain)
 
     ineur = np.arange(0, n_max_neurons)
     spks_train = spks[itrain][:,ineur]
