@@ -18,29 +18,8 @@ from minimodel import metrics
 
 from experanto.datasets import ChunkDataset
 from experanto.dataloaders import get_multisession_dataloader
-from experanto.utils import MultiEpochsDataLoader
-from experanto.utils import LongCycler
 
-from torch.utils.data import Sampler
 from torch.utils.data import DataLoader
-
-class NumpyPermutationSampler(Sampler):
-    def __init__(self, data_source, seed_base: int = 0):
-        self.data_source = data_source
-        self.seed_base = seed_base
-        self.epoch = 0
-
-    def set_epoch(self, epoch: int):
-        self.epoch = epoch
-
-    def __iter__(self):
-        n = len(self.data_source)
-        rng = np.random.RandomState(self.seed_base + self.epoch)
-        perm = rng.permutation(n)
-        return iter(perm.tolist())
-
-    def __len__(self):
-        return len(self.data_source)
 
 
 
@@ -53,8 +32,8 @@ def main():
     # --- setup ---
     device = torch.device('cuda')
     mouse_id = args.mouse_id
-    weight_path = './checkpoints_16-320_exp_test_set_seed2'
-    results_path = './results_16-320_exp_test_set_seed2'
+    weight_path = './checkpoints_16-320_exp_test_pytorch_dl'
+    results_path = './results_16-320_exp_test_pytorch_dl'
     os.makedirs(weight_path, exist_ok=True)
     os.makedirs(results_path, exist_ok=True)
 
@@ -74,6 +53,7 @@ def main():
 
     cfg_train.dataset.modality_config.screen.valid_condition = {"tier": "train"}
     cfg_train.dataloader.batch_size = 100
+    cfg_test.dataloader.shuffle = True
     cfg_val.dataset.modality_config.screen.valid_condition = {"tier": "validation"}
     cfg_val.dataloader.batch_size = 100
 
@@ -84,26 +64,10 @@ def main():
 
     # build dataloaders
     dataset = ChunkDataset(data_path, **cfg_train.dataset)
-    sampler = NumpyPermutationSampler(dataset, seed_base=0)
-    train_dl = DataLoader(
-        dataset,
-        batch_size=cfg_train.dataloader.batch_size,
-        sampler=sampler,
-        shuffle=False,                 # muss False sein, wenn sampler gesetzt ist
-        num_workers=4,                 # Debug: deterministisch
-        pin_memory=cfg_train.dataloader.pin_memory,
-        drop_last=cfg_train.dataloader.drop_last,
-    )
+    train_dl = DataLoader(dataset, **cfg_train.dataloader)
 
     dataset = ChunkDataset(data_path, **cfg_val.dataset)
-    val_dl = DataLoader(
-        dataset,
-        batch_size=cfg_train.dataloader.batch_size,
-        shuffle=False,                 # muss False sein, wenn sampler gesetzt ist
-        num_workers=4,                 # Debug: deterministisch
-        pin_memory=cfg_train.dataloader.pin_memory,
-        drop_last=cfg_train.dataloader.drop_last,
-    )
+    val_dl = DataLoader(dataset, **cfg_val.dataloader)
 
     paths = [data_path]
     test_dl = get_multisession_dataloader(paths, cfg_test)

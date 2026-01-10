@@ -80,7 +80,7 @@ def val_epoch(model, val_dl, dl_length, n_neurons, batch_size, l1_readout=0, l2_
 def train_epoch(model, optimizer, train_dl, dl_length, epoch=0, l1_readout=0, \
     device = torch.device('cuda'), detach_core=False, clamp=True, parallel=False, hs_reg=0.0):
     np.random.seed(epoch)
-    #train_dl.sampler.set_epoch(epoch)        # TODO Only use to experiment
+    train_dl.sampler.set_epoch(epoch)        # TODO Only use to experiment
 
     train_loss = 0
     for batch in train_dl:

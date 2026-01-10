@@ -4,22 +4,19 @@ import numpy as np
 import torch
 import torchvision
 import argparse
+from minimodel import data
+from minimodel import model_builder
+from minimodel import model_trainer
+from minimodel import model_trainer_exp
+from minimodel import model_trainer_exp_testing
+from minimodel import metrics
 from pathlib import Path
 
 from tqdm import tqdm
 from omegaconf import OmegaConf, open_dict
 
-from minimodel import data
-from minimodel import model_builder
-from minimodel import model_trainer
-from minimodel import model_trainer_exp_testing
-from minimodel import model_trainer_exp
-from minimodel import metrics
-
 from experanto.datasets import ChunkDataset
 from experanto.dataloaders import get_multisession_dataloader
-from experanto.utils import MultiEpochsDataLoader
-from experanto.utils import LongCycler
 
 from torch.utils.data import Sampler
 from torch.utils.data import DataLoader
@@ -45,20 +42,21 @@ class NumpyPermutationSampler(Sampler):
 
 
 def main():
-    # --- args parsing ---
+    # args parsing
     parser = argparse.ArgumentParser()
     parser.add_argument("--mouse_id", type=int)
     args = parser.parse_args()
 
-    # --- setup ---
+
+    # setup
     device = torch.device('cuda')
     mouse_id = args.mouse_id
-    weight_path = './checkpoints_16-320_exp_test_set_seed2'
-    results_path = './results_16-320_exp_test_set_seed2'
+    weight_path = './checkpoints_192-x_exp_test_set_seed'
+    results_path = './results_192-x_exp_test_set_seed'
     os.makedirs(weight_path, exist_ok=True)
     os.makedirs(results_path, exist_ok=True)
 
-    path_to_data = '/mnt/vast-nhr/projects/bthesis_cidas_richter/benjamin/minimodel/internship/data_experanto_normalized'
+    path_to_data = '/mnt/vast-nhr/projects/bthesis_cidas_richter/benjamin/minimodel/internship/data_experanto'
     data_folder = f'nat30k_{data.mouse_names[mouse_id]}_{data.exp_date[mouse_id]}_experanto'
     data_path = os.path.join(path_to_data, data_folder)
 
@@ -68,20 +66,19 @@ def main():
     print("cuda available:", torch.cuda.is_available())
 
     # load configs for dataloaders
-    cfg_train = OmegaConf.load("./cfg_experanto/do_nothing_config.yaml")
-    cfg_val = OmegaConf.load("./cfg_experanto/do_nothing_config.yaml")
-    cfg_test = OmegaConf.load("./cfg_experanto/do_nothing_config.yaml")
+    cfg_train = OmegaConf.load("./cfg_experanto/basic_config.yaml")
+    cfg_val = OmegaConf.load("./cfg_experanto/basic_config.yaml")
+    cfg_test = OmegaConf.load("./cfg_experanto/basic_config.yaml")
 
     cfg_train.dataset.modality_config.screen.valid_condition = {"tier": "train"}
-    cfg_train.dataloader.batch_size = 100
     cfg_val.dataset.modality_config.screen.valid_condition = {"tier": "validation"}
-    cfg_val.dataloader.batch_size = 100
 
     cfg_test.dataset.modality_config.screen.valid_condition = {"tier": "test"}
     cfg_test.dataset.out_keys.append("image_id")        # I sadly need this to combine all samples with same image_id
     cfg_test.dataloader.drop_last = False               # Here I dont need the batches to be the same size
     cfg_test.dataloader.shuffle = False
 
+    # build dataloaders
     # build dataloaders
     dataset = ChunkDataset(data_path, **cfg_train.dataset)
     sampler = NumpyPermutationSampler(dataset, seed_base=0)
@@ -114,7 +111,7 @@ def main():
     if cfg_val.dataloader.drop_last:    val_dl_length = len(val_dl) * cfg_val.dataloader.batch_size
     else:                               val_dl_length = model_trainer_exp_testing.count_samples(val_dl)
     if cfg_test.dataloader.drop_last:   test_dl_length = len(test_dl) * cfg_test.dataloader.batch_size
-    else:                               test_dl_length =model_trainer_exp.count_samples(test_dl)
+    else:                               test_dl_length = model_trainer_exp.count_samples(test_dl)
 
     print("length of train_dl: ", train_dl_length)
     print("length of val_dl: ", val_dl_length)
@@ -128,60 +125,62 @@ def main():
     print("Batch Size: ", batch_size)
 
 
-    # --- Building Model ---
-    nlayers = 2
-    nconv1 = 16
-    nconv2 = 320
-    model, in_channels = model_builder.build_model(NN=NN, n_layers=nlayers, n_conv=nconv1, n_conv_mid=nconv2)
-    model_name = model_builder.create_model_name(data.mouse_names[mouse_id], data.exp_date[mouse_id], n_layers=nlayers, in_channels=in_channels)
+    seed = 1
+    feve_nlayers = []
+    for nlayers in range(1, 5):
+        # Building Model
 
-    model_path = os.path.join(weight_path, model_name)
-    print('model path: ', model_path)
-    model = model.to(device)
+        nconv1 = 192
+        nconv2 = 192
+        model, in_channels = model_builder.build_model(NN=NN, n_layers=nlayers, n_conv=nconv1, n_conv_mid=nconv2)
+        model_name = model_builder.create_model_name(data.mouse_names[mouse_id], data.exp_date[mouse_id], n_layers=nlayers, in_channels=in_channels, seed=seed)
+        
+        model_path = os.path.join(weight_path, model_name)
+        print('model path: ', model_path)
+        model = model.to(device)
 
-    # --- Training the model ---
-    print(device)
-    if not os.path.exists(model_path):
-        best_state_dict = model_trainer_exp_testing.train(model, train_dl=train_dl, val_dl=val_dl, 
+
+        # Training the model
+        print(device)
+        if not os.path.exists(model_path):
+            best_state_dict = model_trainer_exp_testing.train(model, train_dl=train_dl, val_dl=val_dl, 
                                                 train_dl_length=train_dl_length, val_dl_length=val_dl_length, 
-                                                n_neurons=NN, batch_size=batch_size ,device=device)
-        torch.save(best_state_dict, model_path)
-        print('saved model', model_path)
-    model.load_state_dict(torch.load(model_path))
-    print('loaded model', model_path)
+                                                n_neurons=NN, batch_size=batch_size, device=device)
+            torch.save(best_state_dict, model_path)
+            print('saved model', model_path)
+        model.load_state_dict(torch.load(model_path))
+        print('loaded model', model_path)
 
-    # --- test model ---
-    img_test, spks_rep_all, unique_ids = model_trainer_exp_testing.build_img_test_and_spks_rep_all(test_dl, device=device)
-    print("Total test images used: ", len(unique_ids))
-    print("img_test: ", img_test.shape)
-    print("spks_rep_all: ", spks_rep_all.shape)
+        # test model
+        img_test, spks_rep_all, unique_ids = model_trainer_exp.build_img_test_and_spks_rep_all(test_dl, device=device)
+        print("Total test images used: ", len(unique_ids))
+        print("img_test: ", img_test.shape)
+        print("spks_rep_all: ", spks_rep_all.shape)
 
-    test_pred = model_trainer.test_epoch(model, img_test)
-    print('test_pred: ', test_pred.shape, test_pred.min(), test_pred.max())
+        test_pred = model_trainer.test_epoch(model, img_test)
+        print('test_pred: ', test_pred.shape, test_pred.min(), test_pred.max())
 
 
-    test_fev, test_feve = metrics.feve(spks_rep_all, test_pred)
-    print('FEVE (test, all): ', np.mean(test_feve))
+        test_fev, test_feve = metrics.feve(spks_rep_all, test_pred)
+        print('FEVE (test, all): ', np.mean(test_feve))
 
-    threshold = 0.15
-    print(f'filtering neurons with FEV > {threshold}')
-    valid_idxes = np.where(test_fev > threshold)[0]
-    print(f'valid neurons: {len(valid_idxes)} / {len(test_fev)}')
-    print(f'FEVE (test, FEV>0.15): {np.mean(test_feve[test_fev > threshold])}')
+        threshold = 0.15
+        print(f'filtering neurons with FEV > {threshold}')
+        valid_idxes = np.where(test_fev > threshold)[0]
+        print(f'valid neurons: {len(valid_idxes)} / {len(test_fev)}')
+        print(f'FEVE (test, FEV>0.15): {np.mean(test_feve[test_fev > threshold])}')
+        feve_nlayers.append(np.mean(test_feve[test_fev > threshold]))
 
+    
+    
     # ---- Saving performance scores ----
     file_name = "results_" + str(mouse_id)
     results_file_path = os.path.join(results_path, file_name)
 
+    feve_nlayers = np.array(feve_nlayers)
+    print("saving array of shape: ", feve_nlayers.shape)
+    np.savez(results_file_path, FEVE_scores=feve_nlayers)
     print(f"Results saved at: {results_file_path}")
-    ineur = np.arange(0, NN)
-    np.savez(results_file_path, FEV_scores=test_fev, FEVE_scores=test_feve, neurons_index=ineur)
-
-
-
-
-
-
 
 if __name__ == "__main__":
     main()
