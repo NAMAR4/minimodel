@@ -48,7 +48,7 @@ def val_epoch(model, val_dl, dl_length, n_neurons, batch_size, l1_readout=0, l2_
     # spks_test_gpu = spks_test.to(device)
     index_array = np.arange(0, dl_length, batch_size)
     with torch.no_grad():
-        for k , (_, batch) in zip(index_array, val_dl):
+        for k , batch in zip(index_array, val_dl):
             spks_batch = batch["responses"]
             img_batch = batch["screen"]
             spks_batch = spks_batch.to(device).squeeze()        # Right now we dont use chunk_size in cfg_val.dataset.modality_config.screen.chunk_size
@@ -76,11 +76,14 @@ def val_epoch(model, val_dl, dl_length, n_neurons, batch_size, l1_readout=0, l2_
 
     return test_loss, varexp, test_pred
 
+
 def train_epoch(model, optimizer, train_dl, dl_length, epoch=0, l1_readout=0, \
     device = torch.device('cuda'), detach_core=False, clamp=True, parallel=False, hs_reg=0.0):
     np.random.seed(epoch)
+    #train_dl.sampler.set_epoch(epoch)        # TODO Only use to experiment
+
     train_loss = 0
-    for _, batch in train_dl:
+    for batch in train_dl:
         optimizer.zero_grad()
 
         spks_batch = batch["responses"]
@@ -270,7 +273,7 @@ def count_samples(dl):
     :param dl: experanto dataloader
     """
     n = 0
-    for _, batch in dl:
+    for batch in dl:
         n += batch["responses"].shape[0]
     return n
 
