@@ -56,7 +56,7 @@ def main():
     os.makedirs(weight_path, exist_ok=True)
     os.makedirs(results_path, exist_ok=True)
 
-    path_to_data = '/mnt/vast-nhr/projects/bthesis_cidas_richter/benjamin/minimodel/internship/data_experanto'
+    path_to_data = '/mnt/vast-nhr/projects/bthesis_cidas_richter/benjamin/minimodel/internship/data_experanto_normalized'
     data_folder = f'nat30k_{data.mouse_names[mouse_id]}_{data.exp_date[mouse_id]}_experanto'
     data_path = os.path.join(path_to_data, data_folder)
 
@@ -66,19 +66,20 @@ def main():
     print("cuda available:", torch.cuda.is_available())
 
     # load configs for dataloaders
-    cfg_train = OmegaConf.load("./cfg_experanto/basic_config.yaml")
-    cfg_val = OmegaConf.load("./cfg_experanto/basic_config.yaml")
-    cfg_test = OmegaConf.load("./cfg_experanto/basic_config.yaml")
+    cfg_train = OmegaConf.load("./cfg_experanto/do_nothing_config.yaml")
+    cfg_val = OmegaConf.load("./cfg_experanto/do_nothing_config.yaml")
+    cfg_test = OmegaConf.load("./cfg_experanto/do_nothing_config.yaml")
 
     cfg_train.dataset.modality_config.screen.valid_condition = {"tier": "train"}
+    cfg_train.dataloader.batch_size = 100
     cfg_val.dataset.modality_config.screen.valid_condition = {"tier": "validation"}
+    cfg_val.dataloader.batch_size = 100
 
     cfg_test.dataset.modality_config.screen.valid_condition = {"tier": "test"}
     cfg_test.dataset.out_keys.append("image_id")        # I sadly need this to combine all samples with same image_id
     cfg_test.dataloader.drop_last = False               # Here I dont need the batches to be the same size
     cfg_test.dataloader.shuffle = False
 
-    # build dataloaders
     # build dataloaders
     dataset = ChunkDataset(data_path, **cfg_train.dataset)
     sampler = NumpyPermutationSampler(dataset, seed_base=0)
@@ -87,7 +88,7 @@ def main():
         batch_size=cfg_train.dataloader.batch_size,
         sampler=sampler,
         shuffle=False,                 # muss False sein, wenn sampler gesetzt ist
-        num_workers=4,                 # Debug: deterministisch
+        num_workers=4,                 # Debug: deterministisch (1)
         pin_memory=cfg_train.dataloader.pin_memory,
         drop_last=cfg_train.dataloader.drop_last,
     )
