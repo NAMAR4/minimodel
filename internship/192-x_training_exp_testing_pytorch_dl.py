@@ -1,23 +1,19 @@
 import os
-from collections import defaultdict
+import argparse
 import numpy as np
 import torch
 import torchvision
-import argparse
+from torch.utils.data import DataLoader
+
 from minimodel import data
 from minimodel import model_builder
 from minimodel import model_trainer
 from minimodel import model_trainer_exp
 from minimodel import metrics
-from pathlib import Path
 
-from tqdm import tqdm
-from omegaconf import OmegaConf, open_dict
-
+from omegaconf import OmegaConf
 from experanto.datasets import ChunkDataset
 from experanto.dataloaders import get_multisession_dataloader
-
-from torch.utils.data import DataLoader
 
 
 def main():
@@ -91,7 +87,6 @@ def main():
     feve_nlayers = []
     for nlayers in range(1, 5):
         # Building Model
-
         nconv1 = 192
         nconv2 = 192
         model, in_channels = model_builder.build_model(NN=NN, n_layers=nlayers, n_conv=nconv1, n_conv_mid=nconv2)

@@ -8,7 +8,6 @@ from minimodel import model_trainer
 from minimodel import metrics
 
 
-
 def main():
     # args parsing
     parser = argparse.ArgumentParser()
@@ -55,8 +54,6 @@ def main():
     print('img_train: ', img_train.shape, img_train.min(), img_train.max())
     print('img_val: ', img_val.shape, img_val.min(), img_val.max())
     print('img_test: ', img_test.shape, img_test.min(), img_test.max())
-
-    input_Ly, input_Lx = img_train.shape[-2:]
 
 
     seed = 1

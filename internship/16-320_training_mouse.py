@@ -55,13 +55,7 @@ def main():
     print('img_val: ', img_val.shape, img_val.min(), img_val.max())
     print('img_test: ', img_test.shape, img_test.min(), img_test.max())
 
-    input_Ly, input_Lx = img_train.shape[-2:]
-
-
-    seed = 1
-
     # Building Model
-
     nlayers = 2
     nconv1 = 16
     nconv2 = 320

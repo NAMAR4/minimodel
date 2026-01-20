@@ -1,13 +1,9 @@
 import os
-from collections import defaultdict
+import argparse
 import numpy as np
 import torch
 import torchvision
-import argparse
-from pathlib import Path
 
-from tqdm import tqdm
-from omegaconf import OmegaConf, open_dict
 
 from minimodel import data
 from minimodel import model_builder
@@ -15,7 +11,7 @@ from minimodel import model_trainer
 from minimodel import model_trainer_exp
 from minimodel import metrics
 
-from experanto.datasets import ChunkDataset
+from omegaconf import OmegaConf
 from experanto.dataloaders import get_multisession_dataloader
 
 
