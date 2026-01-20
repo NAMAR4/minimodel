@@ -1,12 +1,19 @@
 import os
+import argparse
 import numpy as np
 import torch
-import argparse
+import torchvision
+from torch.utils.data import DataLoader
+
 from minimodel import data
 from minimodel import model_builder
 from minimodel import model_trainer
+from minimodel import model_trainer_exp
 from minimodel import metrics
 
+from omegaconf import OmegaConf
+from experanto.datasets import ChunkDataset
+from experanto.dataloaders import get_multisession_dataloader
 
 
 def main():
@@ -50,7 +57,7 @@ def main():
 
     # build dataloaders
     dataset = ChunkDataset(data_path, **cfg_train.dataset)
-    sampler = NumpyPermutationSampler(dataset, seed_base=0)
+    sampler = model_trainer_exp.NumpyPermutationSampler(dataset, seed_base=0)
     train_dl = DataLoader(
         dataset,
         batch_size=cfg_train.dataloader.batch_size,
@@ -93,9 +100,10 @@ def main():
     print("number of neurons: ", NN)
     print("Batch Size: ", batch_size)
 
-
-
-
+    
+    # Need the data in this specific shape to use metrics. 
+    # shape of spks_rep_all: (n_test_img, ) with one sample of n_test_img: (n_repeats, n_neurons)
+    img_test, spks_rep_all, unique_ids = model_trainer_exp.build_img_test_and_spks_rep_all(test_dl, device=device)
 
 
 
@@ -118,8 +126,6 @@ def main():
     for i_neuron in selected_idxes_neurons:
         # We only train models on neurons with a test_fev >= 0.15. 
         ineur = [i_neuron]
-        spks_train_one_neuron = spks_train[:, ineur]
-        spks_val_one_neuron = spks_val[:, ineur]
 
         nlayers = 2
         nconv1 = 16
@@ -142,7 +148,11 @@ def main():
             # initialize conv1 with the fullmodel weights
             model.core.features.layer0.conv.weight.data = pretrained_state_dict['core.features.layer0.conv.weight']
             model.core.features.layer0.conv.weight.requires_grad = False
-            best_state_dict = model_trainer.train(model, spks_train_one_neuron, spks_val_one_neuron, img_train, img_val, device=device, l2_readout=0.2, hs_readout=hs_readout)
+
+            best_state_dict = model_trainer_exp.train(model, train_dl=train_dl, val_dl=val_dl, 
+                                                train_dl_length=train_dl_length, val_dl_length=val_dl_length, 
+                                                n_neurons=NN, batch_size=batch_size, set_seed=True, mini_neuron_idx=ineur[0], device=device)
+            
             torch.save(best_state_dict, model_path)
             print('saved model', model_path)
         model.load_state_dict(torch.load(model_path))

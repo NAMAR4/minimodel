@@ -1,13 +1,9 @@
 import os
-from collections import defaultdict
+import argparse
 import numpy as np
 import torch
 import torchvision
-import argparse
-from pathlib import Path
-
-from tqdm import tqdm
-from omegaconf import OmegaConf, open_dict
+from torch.utils.data import DataLoader
 
 from minimodel import data
 from minimodel import model_builder
@@ -15,32 +11,9 @@ from minimodel import model_trainer
 from minimodel import model_trainer_exp
 from minimodel import metrics
 
+from omegaconf import OmegaConf
 from experanto.datasets import ChunkDataset
 from experanto.dataloaders import get_multisession_dataloader
-from experanto.utils import MultiEpochsDataLoader
-from experanto.utils import LongCycler
-
-from torch.utils.data import Sampler
-from torch.utils.data import DataLoader
-
-class NumpyPermutationSampler(Sampler):
-    def __init__(self, data_source, seed_base: int = 0):
-        self.data_source = data_source
-        self.seed_base = seed_base
-        self.epoch = 0
-
-    def set_epoch(self, epoch: int):
-        self.epoch = epoch
-
-    def __iter__(self):
-        n = len(self.data_source)
-        rng = np.random.RandomState(self.seed_base + self.epoch)
-        perm = rng.permutation(n)
-        return iter(perm.tolist())
-
-    def __len__(self):
-        return len(self.data_source)
-
 
 
 def main():
@@ -83,13 +56,13 @@ def main():
 
     # build dataloaders
     dataset = ChunkDataset(data_path, **cfg_train.dataset)
-    sampler = NumpyPermutationSampler(dataset, seed_base=0)
+    sampler = model_trainer_exp.NumpyPermutationSampler(dataset, seed_base=0)
     train_dl = DataLoader(
         dataset,
         batch_size=cfg_train.dataloader.batch_size,
         sampler=sampler,
         shuffle=False,                 # muss False sein, wenn sampler gesetzt ist
-        num_workers=4,                 # Debug: deterministisch
+        num_workers=4,                 # Debug: 1 für deterministisch
         pin_memory=cfg_train.dataloader.pin_memory,
         drop_last=cfg_train.dataloader.drop_last,
     )
