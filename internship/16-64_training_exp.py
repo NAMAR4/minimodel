@@ -3,7 +3,6 @@ import argparse
 import numpy as np
 import torch
 import torchvision
-from torch.utils.data import DataLoader
 
 from minimodel import data
 from minimodel import model_builder
@@ -12,7 +11,6 @@ from minimodel import model_trainer_exp
 from minimodel import metrics
 
 from omegaconf import OmegaConf
-from experanto.datasets import ChunkDataset
 from experanto.dataloaders import get_multisession_dataloader
 
 
