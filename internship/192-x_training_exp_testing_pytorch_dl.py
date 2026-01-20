@@ -8,7 +8,6 @@ from minimodel import data
 from minimodel import model_builder
 from minimodel import model_trainer
 from minimodel import model_trainer_exp
-from minimodel import model_trainer_exp_testing
 from minimodel import metrics
 from pathlib import Path
 
@@ -70,9 +69,9 @@ def main():
     print("Loaded experanto data from: ", data_path)
 
     if cfg_train.dataloader.drop_last:  train_dl_length = len(train_dl) * cfg_train.dataloader.batch_size
-    else:                               train_dl_length = model_trainer_exp_testing.count_samples(train_dl)
+    else:                               train_dl_length = model_trainer_exp.count_samples(train_dl)
     if cfg_val.dataloader.drop_last:    val_dl_length = len(val_dl) * cfg_val.dataloader.batch_size
-    else:                               val_dl_length = model_trainer_exp_testing.count_samples(val_dl)
+    else:                               val_dl_length = model_trainer_exp.count_samples(val_dl)
     if cfg_test.dataloader.drop_last:   test_dl_length = len(test_dl) * cfg_test.dataloader.batch_size
     else:                               test_dl_length = model_trainer_exp.count_samples(test_dl)
 
@@ -106,7 +105,7 @@ def main():
         # Training the model
         print(device)
         if not os.path.exists(model_path):
-            best_state_dict = model_trainer_exp_testing.train(model, train_dl=train_dl, val_dl=val_dl, 
+            best_state_dict = model_trainer_exp.train(model, train_dl=train_dl, val_dl=val_dl, 
                                                 train_dl_length=train_dl_length, val_dl_length=val_dl_length, 
                                                 n_neurons=NN, batch_size=batch_size, device=device)
             torch.save(best_state_dict, model_path)

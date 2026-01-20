@@ -48,7 +48,8 @@ def val_epoch(model, val_dl, dl_length, n_neurons, batch_size, l1_readout=0, l2_
     # spks_test_gpu = spks_test.to(device)
     index_array = np.arange(0, dl_length, batch_size)
     with torch.no_grad():
-        for k , (_, batch) in zip(index_array, val_dl):
+        for k , item in zip(index_array, val_dl):
+            batch = item[1] if isinstance(item, tuple) else item    # for the experanto case (dataset_name, batch) = item
             spks_batch = batch["responses"]
             img_batch = batch["screen"]
             spks_batch = spks_batch.to(device).squeeze()        # Right now we dont use chunk_size in cfg_val.dataset.modality_config.screen.chunk_size
@@ -76,11 +77,14 @@ def val_epoch(model, val_dl, dl_length, n_neurons, batch_size, l1_readout=0, l2_
 
     return test_loss, varexp, test_pred
 
-def train_epoch(model, optimizer, train_dl, dl_length, epoch=0, l1_readout=0, \
+def train_epoch(model, optimizer, train_dl, dl_length, set_seed=False, epoch=0, l1_readout=0, \
     device = torch.device('cuda'), detach_core=False, clamp=True, parallel=False, hs_reg=0.0):
     np.random.seed(epoch)
+    if set_seed: train_dl.sampler.set_epoch(epoch)
+
     train_loss = 0
-    for _, batch in train_dl:
+    for item in train_dl:
+        batch = item[1] if isinstance(item, tuple) else item    # for the experanto case (dataset_name, batch) = item
         optimizer.zero_grad()
 
         spks_batch = batch["responses"]
@@ -109,7 +113,7 @@ def train_epoch(model, optimizer, train_dl, dl_length, epoch=0, l1_readout=0, \
     return train_loss
 
 
-def train(model, train_dl, val_dl, train_dl_length, val_dl_length, n_neurons, batch_size,l2_readout=0.1, hs_readout=0, clamp=True, device='cuda', n_epochs_period=[100, 30, 30, 30], patience=5):
+def train(model, train_dl, val_dl, train_dl_length, val_dl_length, n_neurons, batch_size, set_seed=False, l2_readout=0.1, hs_readout=0, clamp=True, device='cuda', n_epochs_period=[100, 30, 30, 30], patience=5):
     import time
     # batch_size = 100
     detach_core = False
@@ -141,7 +145,7 @@ def train(model, train_dl, val_dl, train_dl_length, val_dl_length, n_neurons, ba
         for epoch in range(n_epochs):
             model.train()
             train_loss = train_epoch(
-                                model, optimizer, train_dl, dl_length=train_dl_length, epoch=epoch,
+                                model, optimizer, train_dl, dl_length=train_dl_length, set_seed=set_seed, epoch=epoch,
                                 device=device, detach_core=detach_core, clamp=clamp, hs_reg=hs_readout
                             )
             model.eval()
@@ -265,12 +269,13 @@ def monkey_train(model, train_responses, train_real_responses, val_responses, va
 
 def count_samples(dl):
     """
-    Counts all the samples in an experanto dataloader
+    Counts all the samples in an dataloader
     
-    :param dl: experanto dataloader
+    :param dl: experanto dataloader / normal pytorch dataloader
     """
     n = 0
-    for _, batch in dl:
+    for item in dl:
+        batch = item[1] if isinstance(item, tuple) else item    # for the experanto case (dataset_name, batch) = item
         n += batch["responses"].shape[0]
     return n
 
