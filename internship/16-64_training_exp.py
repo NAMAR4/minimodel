@@ -25,9 +25,9 @@ def main():
     # --- setup ---
     device = torch.device('cuda')
     mouse_id = args.mouse_id
-    pretrained_weight_path = './checkpoints_16-320_exp_test_set_seed2'
-    weight_path = './checkpoints_16-64_exp_test_set_seed'
-    results_path = './results_16-64_exp_test_set_seed'
+    pretrained_weight_path = './checkpoints_16-320_exp'  # Which should I take?
+    weight_path = './checkpoints_16-64_exp'
+    results_path = './results_16-64_exp'
     os.makedirs(weight_path, exist_ok=True)
     os.makedirs(results_path, exist_ok=True)
 
@@ -46,9 +46,7 @@ def main():
     cfg_test = OmegaConf.load("./cfg_experanto/do_nothing_config.yaml")
 
     cfg_train.dataset.modality_config.screen.valid_condition = {"tier": "train"}
-    cfg_train.dataloader.batch_size = 100
     cfg_val.dataset.modality_config.screen.valid_condition = {"tier": "validation"}
-    cfg_val.dataloader.batch_size = 100
 
     cfg_test.dataset.modality_config.screen.valid_condition = {"tier": "test"}
     cfg_test.dataset.out_keys.append("image_id")        # I sadly need this to combine all samples with same image_id
@@ -56,29 +54,9 @@ def main():
     cfg_test.dataloader.shuffle = False
 
     # build dataloaders
-    dataset = ChunkDataset(data_path, **cfg_train.dataset)
-    sampler = model_trainer_exp.NumpyPermutationSampler(dataset, seed_base=0)
-    train_dl = DataLoader(
-        dataset,
-        batch_size=cfg_train.dataloader.batch_size,
-        sampler=sampler,
-        shuffle=False,                 # muss False sein, wenn sampler gesetzt ist
-        num_workers=4,                 # Debug: deterministisch
-        pin_memory=cfg_train.dataloader.pin_memory,
-        drop_last=cfg_train.dataloader.drop_last,
-    )
-
-    dataset = ChunkDataset(data_path, **cfg_val.dataset)
-    val_dl = DataLoader(
-        dataset,
-        batch_size=cfg_train.dataloader.batch_size,
-        shuffle=False,                 # muss False sein, wenn sampler gesetzt ist
-        num_workers=4,                 # Debug: deterministisch
-        pin_memory=cfg_train.dataloader.pin_memory,
-        drop_last=cfg_train.dataloader.drop_last,
-    )
-
     paths = [data_path]
+    train_dl = get_multisession_dataloader(paths, cfg_train)
+    val_dl = get_multisession_dataloader(paths, cfg_val)
     test_dl = get_multisession_dataloader(paths, cfg_test)
     print("Loaded experanto data from: ", data_path)
 
@@ -94,7 +72,7 @@ def main():
     print("length of test_dl: ", test_dl_length)
 
     
-    batch = next(iter(train_dl))
+    _ ,batch = next(iter(train_dl))
     NN = batch["responses"].shape[-1]       # number of neurons
     batch_size = cfg_val.dataloader.batch_size  # nur im val_epoch benötigt
     print("number of neurons: ", NN)
@@ -151,7 +129,7 @@ def main():
 
             best_state_dict = model_trainer_exp.train(model, train_dl=train_dl, val_dl=val_dl, 
                                                 train_dl_length=train_dl_length, val_dl_length=val_dl_length, 
-                                                n_neurons=NN, batch_size=batch_size, set_seed=True, mini_neuron_idx=ineur[0], device=device)
+                                                n_neurons=NN, batch_size=batch_size, set_seed=False, mini_neuron_idx=ineur[0], device=device)
             
             torch.save(best_state_dict, model_path)
             print('saved model', model_path)
