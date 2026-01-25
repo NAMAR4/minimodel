@@ -29,7 +29,7 @@ def main():
     os.makedirs(weight_path, exist_ok=True)
     os.makedirs(results_path, exist_ok=True)
 
-    path_to_data = '/mnt/vast-nhr/projects/bthesis_cidas_richter/benjamin/minimodel/internship/data_experanto_normalized'
+    path_to_data = '/mnt/vast-nhr/projects/bthesis_cidas_richter/benjamin/minimodel/internship/data_experanto'
     data_folder = f'nat30k_{data.mouse_names[mouse_id]}_{data.exp_date[mouse_id]}_experanto'
     data_path = os.path.join(path_to_data, data_folder)
 
@@ -39,9 +39,9 @@ def main():
     print("cuda available:", torch.cuda.is_available())
 
     # load configs for dataloaders
-    cfg_train = OmegaConf.load("./cfg_experanto/do_nothing_config.yaml")
-    cfg_val = OmegaConf.load("./cfg_experanto/do_nothing_config.yaml")
-    cfg_test = OmegaConf.load("./cfg_experanto/do_nothing_config.yaml")
+    cfg_train = OmegaConf.load("./cfg_experanto/basic_config.yaml")
+    cfg_val = OmegaConf.load("./cfg_experanto/basic_config.yaml")
+    cfg_test = OmegaConf.load("./cfg_experanto/basic_config.yaml")
 
     cfg_train.dataset.modality_config.screen.valid_condition = {"tier": "train"}
     cfg_val.dataset.modality_config.screen.valid_condition = {"tier": "validation"}
@@ -93,9 +93,10 @@ def main():
 
     # We only subsample up to 100 neurons to reduce computing time to ~ 7h per mouse
     n_selecting = min(50, len(valid_idxes_neurons))
+    seed = 1
+    np.random.seed(seed)
     selected_idxes_neurons = np.random.choice(valid_idxes_neurons, size=n_selecting, replace=False)
 
-    seed = 1
     FEVE_scores = []
     FEV_scores = []
     # Building Model

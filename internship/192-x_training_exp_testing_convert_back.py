@@ -25,8 +25,8 @@ def main():
     # setup
     device = torch.device('cuda')
     mouse_id = args.mouse_id
-    weight_path = './checkpoints_192-x_exp_test'
-    results_path = './results_192-x_exp_test'
+    weight_path = './checkpoints_192-x_exp_test_convert_back'
+    results_path = './results_192-x_exp_test_convert_back'
     os.makedirs(weight_path, exist_ok=True)
     os.makedirs(results_path, exist_ok=True)
 
