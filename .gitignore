@@ -1,3 +1,9 @@
+# internship
+!internship/results_*/
+!internship/results_*/**
+
+
+
 # matlab
 *.mat
 
